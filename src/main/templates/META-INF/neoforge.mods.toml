@@ -1,23 +1,15 @@
-# This is an example neoforge.mods.toml file. It contains the data relating to the loading mods.
-# There are several mandatory fields (#mandatory), and many more that are optional (#optional).
-# The overall format is standard TOML format, v0.5.0.
-# Note that there are a couple of TOML lists in this file.
-# Find more information on toml format here:  https://github.com/toml-lang/toml
-
 # The name of the mod loader type to load - for regular FML @Mod mods it should be javafml
 modLoader="javafml" #mandatory
 
-# A version range to match for said mod loader - for regular FML @Mod it will be the FML version. This is currently 2.
+# A version range to match for said mod loader - for regular FML @Mod it will be the FML version.
 loaderVersion="${loader_version_range}" #mandatory
 
 # The license for you mod. This is mandatory metadata and allows for easier comprehension of your redistributive properties.
-# Review your options at https://choosealicense.com/. All rights reserved is the default copyright stance, and is thus the default here.
 license="${mod_license}"
 
 # A URL to refer people to when problems occur with this mod
 #issueTrackerURL="https://change.me.to.your.issue.tracker.example.invalid/" #optional
 
-# A list of mods - how many allowed here is determined by the individual mod loader
 [[mods]] #mandatory
 
 # The modid of the mod
@@ -44,37 +36,44 @@ displayName="${mod_name}" #mandatory
 # The authors of the mod, displayed in the mod UI (optional)
 authors="Fiskerz"
 
+# NOTE ON CLIENTS: this mod is server-side. A vanilla client, or a client without this mod, can connect to a server
+# running it. NeoForge only refuses such a connection when a mod registers a non-optional network payload; this mod
+# registers none, and no blocks, items or other registry content either, so there is nothing for a client to be
+# missing. The old "displayTest" key is deliberately absent: it was removed from NeoForge along with the pre-1.20.2
+# networking stack and has no effect in 1.21.1.
+
 # The description text for the mod (multi line!) (#mandatory)
 description='''
-Adds in the sponsor system, where you can invite other players to a server, adding them to the whitelist. At the same time the player that invites becomes the invited players "sponsor", which in translation means that if the invited player does something bad, the sponsor takes a partial consequence for the action. Inspired by a video I saw online suggesting this. This should help keeping your server clean and hopefully issue-less.
+Access to the server is a tree of personal responsibility.
+
+Every player is invited by exactly one other player, who becomes their permanent sponsor. Anyone can run /invite
+<name>, which whitelists that player immediately - even if they have never joined and are currently offline - and
+records the caller as their sponsor. If an invitee misbehaves, the link back to whoever vouched for them is visible,
+permanent, and enforceable: an admin can act on a whole branch at once, and a sponsor can withdraw their own invite
+with /uninvite.
+
+Nobody who was not invited by someone can join. Server-side only; vanilla clients can connect.
 '''
 
 # The [[mixins]] block allows you to declare your mixin config to FML so that it gets loaded.
+# This mod uses no mixins.
 #[[mixins]]
 #config="${mod_id}.mixins.json"
 
 # The [[accessTransformers]] block allows you to declare where your AT file is.
-# If this block is omitted, a fallback attempt will be made to load an AT from META-INF/accesstransformer.cfg
+# This mod uses no Access Transformers.
 #[[accessTransformers]]
 #file="META-INF/accesstransformer.cfg"
-
-# The coremods config file path is not configurable and is always loaded from META-INF/coremods.json
 
 # A dependency - use the . to indicate dependency for a specific modid. Dependencies are optional.
 [[dependencies.${mod_id}]] #optional
     # the modid of the dependency
     modId="neoforge" #mandatory
     # The type of the dependency. Can be one of "required", "optional", "incompatible" or "discouraged" (case insensitive).
-    # 'required' requires the mod to exist, 'optional' does not
-    # 'incompatible' will prevent the game from loading when the mod exists, and 'discouraged' will show a warning
     type="required" #mandatory
-    # Optional field describing why the dependency is required or why it is incompatible
-    # reason="..."
     # The version range of the dependency
     versionRange="[${neo_version},)" #mandatory
     # An ordering relationship for the dependency.
-    # BEFORE - This mod is loaded BEFORE the dependency
-    # AFTER - This mod is loaded AFTER the dependency
     ordering="NONE"
     # Side this dependency is applied on - BOTH, CLIENT, or SERVER
     side="BOTH"
@@ -87,9 +86,3 @@ Adds in the sponsor system, where you can invite other players to a server, addi
     versionRange="${minecraft_version_range}"
     ordering="NONE"
     side="BOTH"
-
-# Features are specific properties of the game environment, that you may want to declare you require. This example declares
-# that your mod requires GL version 3.2 or higher. Other features will be added. They are side aware so declaring this won't
-# stop your mod loading on the server for example.
-#[features.${mod_id}]
-#openGLVersion="[3.2,)"

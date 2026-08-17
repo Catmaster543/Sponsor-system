@@ -29,6 +29,8 @@ sourceSets.main.resources {
 
 repositories {
     // Add here additional repositories if required by some of the dependencies below.
+    // Needed for the JUnit test framework below; the mod itself pulls nothing from here.
+    mavenCentral()
 }
 
 base {
@@ -137,6 +139,24 @@ dependencies {
     // For more info:
     // http://www.gradle.org/docs/current/userguide/artifact_dependencies_tutorial.html
     // http://www.gradle.org/docs/current/userguide/dependency_management.html
+
+    // Test-only. The sponsorship graph and its JSON store have no Minecraft imports, so they are tested as plain
+    // Java with no game instance and no NeoForge test harness.
+    testImplementation platform("org.junit:junit-bom:5.10.1")
+    testImplementation "org.junit.jupiter:junit-jupiter"
+    testRuntimeOnly "org.junit.platform:junit-platform-launcher"
+
+    // ModDevGradle puts Minecraft and its libraries on the mod's compile classpath but not on the test one.
+    // SponsorStore uses GSON, which ships with the game, so hand the tests the same classpath the mod compiles
+    // against rather than declaring a second, possibly mismatched, GSON version.
+    testRuntimeOnly files(provider { sourceSets.main.compileClasspath })
+}
+
+tasks.named('test', Test).configure {
+    useJUnitPlatform()
+    testLogging {
+        events "passed", "skipped", "failed"
+    }
 }
 
 // This block of code expands all declared replace properties in the specified resource targets.

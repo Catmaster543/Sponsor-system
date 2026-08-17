@@ -35,7 +35,7 @@ public final class SponsorEntry {
         return this.lastKnownName;
     }
 
-    public void setLastKnownName(String lastKnownName) {
+    void setLastKnownName(String lastKnownName) {
         this.lastKnownName = lastKnownName;
     }
 
@@ -66,7 +66,7 @@ public final class SponsorEntry {
         return this.acceptedAt;
     }
 
-    public void setAcceptedAt(long acceptedAt) {
+    void setAcceptedAt(long acceptedAt) {
         this.acceptedAt = acceptedAt;
     }
 
