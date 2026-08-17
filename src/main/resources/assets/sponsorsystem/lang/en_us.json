@@ -1,0 +1,13 @@
+{
+  "itemGroup.sponsorsystem": "Example Mod Tab",
+  "block.sponsorsystem.example_block": "Example Block",
+  "item.sponsorsystem.example_item": "Example Item",
+
+  "sponsorsystem.configuration.title": "Sponsor system Configs",
+  "sponsorsystem.configuration.section.sponsorsystem.common.toml": "Sponsor system Configs",
+  "sponsorsystem.configuration.section.sponsorsystem.common.toml.title": "Sponsor system Configs",
+  "sponsorsystem.configuration.items": "Item List",
+  "sponsorsystem.configuration.logDirtBlock": "Log Dirt Block",
+  "sponsorsystem.configuration.magicNumberIntroduction": "Magic Number Text",
+  "sponsorsystem.configuration.magicNumber": "Magic Number"
+}
