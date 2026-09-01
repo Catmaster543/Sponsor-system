@@ -61,6 +61,13 @@ neoForge {
             systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
         }
 
+        // second client instance
+        client2 {
+            client()
+            gameDirectory = project.file('run-client2') // separate folder, avoids file lock/options.txt clashes
+            programArguments.addAll '--username', 'Dev2'
+        }
+
         server {
             server()
             programArgument '--nogui'
@@ -147,9 +154,11 @@ dependencies {
     testRuntimeOnly "org.junit.platform:junit-platform-launcher"
 
     // ModDevGradle puts Minecraft and its libraries on the mod's compile classpath but not on the test one.
-    // SponsorStore uses GSON, which ships with the game, so hand the tests the same classpath the mod compiles
-    // against rather than declaring a second, possibly mismatched, GSON version.
-    testRuntimeOnly files(provider { sourceSets.main.compileClasspath })
+    // Hand the tests the same classpath the mod compiles against, rather than declaring second, possibly
+    // mismatched, copies of GSON and Brigadier. The store tests need GSON, and the command permission test
+    // builds the real Brigadier tree and asks it about CommandSourceStack, so this has to be on the compile
+    // classpath and not only the runtime one.
+    testImplementation files(provider { sourceSets.main.compileClasspath })
 }
 
 tasks.named('test', Test).configure {

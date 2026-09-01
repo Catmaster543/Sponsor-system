@@ -1,0 +1,4 @@
+/sponsor Dev
+/sponsor Dev2
+/invites Dev2
+/uninvite Dev

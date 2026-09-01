@@ -24,25 +24,29 @@ public class SponsorGraphException extends RuntimeException {
         return this.reason;
     }
 
-    /** The UUID the failure is about, when one is relevant (e.g. the existing sponsor on a duplicate invite). */
+    /** The UUID the failure is about, when one is relevant. */
     public UUID getSubject() {
         return this.subject;
     }
 
     public enum Reason {
-        /** A player tried to invite themselves. */
-        SELF_INVITE,
-        /** The inviting player is not part of the tree, so they cannot sponsor anyone. */
-        SPONSOR_NOT_IN_GRAPH,
-        /** The inviting player's own sponsorship was revoked, so they cannot vouch for anyone else. */
-        SPONSOR_REVOKED,
-        /** The target already has a live sponsorship. {@link #getSubject()} is the existing sponsor. */
-        ALREADY_SPONSORED,
-        /** The operation would make someone their own ancestor. */
-        WOULD_CREATE_CYCLE,
-        /** The sponsor has used up their configured invite allowance. */
-        INVITE_LIMIT_REACHED,
-        /** The referenced player has no entry in the tree. */
-        NOT_IN_GRAPH
+        /** A player tried to support themselves. */
+        SELF_SUPPORT,
+        /** The supporting player is not part of the graph, so they cannot back anyone. */
+        SUPPORTER_NOT_IN_GRAPH,
+        /** The supporting player was removed by an operator and can no longer back anyone. */
+        SUPPORTER_REVOKED,
+        /** {@code /invite} was used on someone who is already in the graph; they need {@code /sponsor}. */
+        ALREADY_IN_GRAPH,
+        /** {@code /sponsor} was used on someone who is not in the graph yet; they need {@code /invite}. */
+        NOT_IN_GRAPH,
+        /** This exact supporter already backs this exact player. */
+        DUPLICATE_EDGE,
+        /** The supporter has no support tickets left. */
+        NO_TICKETS_LEFT,
+        /** There is no edge from this supporter to this player to withdraw. */
+        NO_SUCH_EDGE,
+        /** A sponsorship cannot be withdrawn yet; it has not existed for the configured minimum. */
+        SPONSORSHIP_TOO_YOUNG
     }
 }

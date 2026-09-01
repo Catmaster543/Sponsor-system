@@ -4,24 +4,37 @@ import java.util.Objects;
 import java.util.UUID;
 
 /**
- * One node of the sponsorship tree.
+ * One player in the support graph.
  *
- * <p>The UUID is the only identity key. {@link #getLastKnownName()} exists purely so admins can read
- * {@code sponsors.json} and chat messages can show something human; it is refreshed on every login and must never
- * be used to look an entry up.
+ * <p>Who supports this player is <em>not</em> stored here — that lives in the edge set, because a player may have any
+ * number of supporters. This holds only what is true of the player themselves.
+ *
+ * <p>The UUID is the only identity key. {@link #getLastKnownName()} exists so admins can read {@code sponsors.json}
+ * and so chat can show something human; it is refreshed on every login and must never be used to look an entry up.
  */
 public final class SponsorEntry {
     private final UUID uuid;
     private String lastKnownName;
-    private UUID sponsor;
     private long invitedAt;
     private long acceptedAt;
     private SponsorStatus status;
+    /**
+     * Whether this player is an anchor of the graph: the founder, or someone an operator adopted with no
+     * supporter. Persisted, and deliberately NOT inferred from having no incoming edges - a player whose last
+     * supporter withdrew also has no incoming edges, and treating those two alike would turn withdrawing the
+     * final edge into a promotion to root instead of an abandonment.
+     */
+    private boolean root;
 
-    public SponsorEntry(UUID uuid, String lastKnownName, UUID sponsor, long invitedAt, long acceptedAt, SponsorStatus status) {
+    public SponsorEntry(UUID uuid, String lastKnownName, long invitedAt, long acceptedAt, SponsorStatus status) {
+        this(uuid, lastKnownName, invitedAt, acceptedAt, status, false);
+    }
+
+    public SponsorEntry(UUID uuid, String lastKnownName, long invitedAt, long acceptedAt, SponsorStatus status,
+            boolean root) {
+        this.root = root;
         this.uuid = Objects.requireNonNull(uuid, "uuid");
         this.lastKnownName = lastKnownName;
-        this.sponsor = sponsor;
         this.invitedAt = invitedAt;
         this.acceptedAt = acceptedAt;
         this.status = Objects.requireNonNull(status, "status");
@@ -39,20 +52,7 @@ public final class SponsorEntry {
         this.lastKnownName = lastKnownName;
     }
 
-    /** The sponsor's UUID, or {@code null} when this entry is a root of the tree. */
-    public UUID getSponsor() {
-        return this.sponsor;
-    }
-
-    void setSponsor(UUID sponsor) {
-        this.sponsor = sponsor;
-    }
-
-    public boolean isRoot() {
-        return this.sponsor == null;
-    }
-
-    /** Epoch millis at which the invite was issued. */
+    /** Epoch millis at which this player was first brought onto the server. */
     public long getInvitedAt() {
         return this.invitedAt;
     }
@@ -68,6 +68,15 @@ public final class SponsorEntry {
 
     void setAcceptedAt(long acceptedAt) {
         this.acceptedAt = acceptedAt;
+    }
+
+    /** Whether this player anchors the graph. See the field comment: this is stored, never inferred. */
+    public boolean isRoot() {
+        return this.root;
+    }
+
+    void setRoot(boolean root) {
+        this.root = root;
     }
 
     public SponsorStatus getStatus() {
@@ -95,6 +104,6 @@ public final class SponsorEntry {
 
     @Override
     public String toString() {
-        return "SponsorEntry[" + this.uuid + " '" + this.lastKnownName + "' sponsor=" + this.sponsor + " " + this.status + "]";
+        return "SponsorEntry[" + this.uuid + " '" + this.lastKnownName + "' " + this.status + "]";
     }
 }
