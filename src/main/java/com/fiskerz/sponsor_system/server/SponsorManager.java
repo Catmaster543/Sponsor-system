@@ -22,7 +22,9 @@ import com.fiskerz.sponsor_system.bootstrap.BootstrapDecision;
 import com.fiskerz.sponsor_system.bootstrap.BootstrapPolicy;
 import com.fiskerz.sponsor_system.bootstrap.ServerState;
 import com.fiskerz.sponsor_system.command.Messages;
+import com.fiskerz.sponsor_system.command.SponsorCommands;
 import com.fiskerz.sponsor_system.graph.EdgeKind;
+import com.fiskerz.sponsor_system.graph.GraceCountdown;
 import com.fiskerz.sponsor_system.graph.SponsorEntry;
 import com.fiskerz.sponsor_system.graph.SponsorStatus;
 import com.fiskerz.sponsor_system.graph.SupportEdge;
@@ -50,6 +52,9 @@ public final class SponsorManager {
     /** Minecraft usernames: 3-16 characters of letters, digits and underscore. Checked before any network call. */
     private static final Pattern VALID_NAME = Pattern.compile("^[A-Za-z0-9_]{3,16}$");
     private static final long TICKS_PER_HOUR = 20L * 60L * 60L;
+    /** The countdown updates once a second, never once a tick. */
+    private static final long TICKS_PER_GRACE_TICK = 20L;
+    private static final int TICK_SECONDS = 1;
 
     @Nullable
     private static SponsorManager instance;
@@ -59,6 +64,7 @@ public final class SponsorManager {
     private final SponsorStore store;
     private final WhitelistBridge whitelist;
     private long ticksUntilExpirySweep = TICKS_PER_HOUR;
+    private long ticksUntilGraceTick = TICKS_PER_GRACE_TICK;
     /**
      * Whether a root exists. Only ever moves BOOTSTRAP -> ESTABLISHED, never back: a bootstrap you can re-enter by
      * revoking everyone would be a backdoor that turns the whitelist off on a live server. Server thread only.
@@ -146,7 +152,7 @@ public final class SponsorManager {
         }
 
         // One recompute at startup, so a graph edited by hand between runs is reconciled before anyone joins.
-        SupportGraph.SupportChange change = this.graph.recomputeSupport(this.supportModel());
+        SupportGraph.SupportChange change = this.graph.recomputeSupport(this.supportModel(), this.fullGraceSeconds());
         if (!change.abandoned().isEmpty()) {
             Sponsorsystem.LOGGER.warn("{} player(s) have no support and are marked ABANDONED: {}",
                     change.abandoned().size(), this.describe(change.abandoned()));
@@ -272,7 +278,7 @@ public final class SponsorManager {
         List<String> warnings = new ArrayList<>();
         SponsorStore.Loaded loaded = this.store.load(warnings);
         warnings.addAll(this.graph.replaceAll(loaded.entries(), loaded.edges()));
-        this.graph.recomputeSupport(this.supportModel());
+        this.graph.recomputeSupport(this.supportModel(), this.fullGraceSeconds());
         this.reconcileWithWhitelist();
         return warnings;
     }
@@ -425,7 +431,7 @@ public final class SponsorManager {
      * @return the support changes, or empty if the save failed and nothing happened
      */
     private Optional<SupportGraph.SupportChange> commit(@Nullable String restoredByName) {
-        SupportGraph.SupportChange change = this.graph.recomputeSupport(this.supportModel());
+        SupportGraph.SupportChange change = this.graph.recomputeSupport(this.supportModel(), this.fullGraceSeconds());
         if (!this.save()) {
             return Optional.empty();
         }
@@ -435,17 +441,31 @@ public final class SponsorManager {
 
     private void announceSupportChange(SupportGraph.SupportChange change, @Nullable String restoredByName) {
         for (UUID uuid : change.abandoned()) {
-            String name = this.graph.get(uuid).map(SponsorEntry::displayName).orElse(uuid.toString());
-            Sponsorsystem.LOGGER.info("{} has lost all support and is now ABANDONED. They keep their whitelist entry; "
-                    + "losing support is not enforced yet.", name);
-            this.tell(uuid, Messages.error("sponsorsystem.support.lost"));
+            SponsorEntry entry = this.graph.get(uuid).orElse(null);
+            String name = entry == null ? uuid.toString() : entry.displayName();
+            int remaining = entry == null ? 0 : entry.getGraceSecondsRemaining();
+            Sponsorsystem.LOGGER.info("{} has lost all support and is now ABANDONED, with {} of grace remaining.",
+                    name, GraceCountdown.format(remaining));
+            // Offline players are told on their next login instead; the clock is not running for them yet anyway.
+            this.tell(uuid, Messages.error("sponsorsystem.support.lost",
+                    GraceCountdown.minutesRemaining(remaining)));
         }
         for (UUID uuid : change.restored()) {
             String name = this.graph.get(uuid).map(SponsorEntry::displayName).orElse(uuid.toString());
-            Sponsorsystem.LOGGER.info("{} has support again and is no longer abandoned.", name);
+            Sponsorsystem.LOGGER.info("{} has support again; their grace clock has been cleared.", name);
             this.tell(uuid, restoredByName == null
                     ? Messages.success("sponsorsystem.support.restored")
                     : Messages.success("sponsorsystem.support.restored_by", Messages.name(restoredByName)));
+            // The countdown is on the action bar, which nothing else will clear for us.
+            this.clearActionBar(uuid);
+        }
+    }
+
+    /** Wipes a stale countdown off the action bar by overwriting it with an empty component. */
+    private void clearActionBar(UUID uuid) {
+        ServerPlayer player = this.server.getPlayerList().getPlayer(uuid);
+        if (player != null) {
+            player.displayClientMessage(Component.empty(), true);
         }
     }
 
@@ -600,7 +620,16 @@ public final class SponsorManager {
             this.save();
         }
         if (this.graph.get(uuid).map(entry -> entry.getStatus() == SponsorStatus.ABANDONED).orElse(false)) {
-            player.sendSystemMessage(Messages.error("sponsorsystem.support.lost_on_join"));
+            // Their clock has been paused since they logged out. Say so on the way in, because the action bar
+            // countdown is easy to miss and says nothing about why it is there.
+            SponsorEntry entry = this.graph.get(uuid).orElseThrow();
+            if (!entry.hasGraceClock()) {
+                this.graph.startGrace(uuid, this.fullGraceSeconds());
+                this.save();
+            }
+            player.sendSystemMessage(Messages.error("sponsorsystem.support.lost_on_join",
+                    GraceCountdown.minutesRemaining(entry.getGraceSecondsRemaining())));
+            player.sendSystemMessage(Messages.info("sponsorsystem.support.lost_on_join_detail"));
         }
     }
 
@@ -708,16 +737,111 @@ public final class SponsorManager {
     // Expiry
     // ---------------------------------------------------------------------------------------------------------------
 
-    /** Called every server tick; the sweep itself runs at most once an hour. */
+    /**
+     * Called every server tick.
+     *
+     * <p>Both jobs here are gated behind their own counters, and the grace pass returns immediately when nobody is
+     * abandoned, so on a healthy server this costs one decrement and one comparison per tick and nothing else. It
+     * never walks the player list; it walks the abandoned set, which is empty in the normal case.
+     */
     public void tick() {
-        if (Config.PENDING_INVITE_EXPIRY_HOURS.get() <= 0) {
+        if (Config.PENDING_INVITE_EXPIRY_HOURS.get() > 0 && --this.ticksUntilExpirySweep <= 0) {
+            this.ticksUntilExpirySweep = TICKS_PER_HOUR;
+            this.sweepExpiredInvites();
+        }
+
+        if (--this.ticksUntilGraceTick > 0) {
             return;
         }
-        if (--this.ticksUntilExpirySweep > 0) {
+        this.ticksUntilGraceTick = TICKS_PER_GRACE_TICK;
+        this.tickGrace();
+    }
+
+    /**
+     * Burns one second off every online abandoned player's clock, updates their countdown, and expires anyone who
+     * has run out.
+     *
+     * <p>Called once a second, not once a tick. Offline players are skipped entirely, which is what makes the clock
+     * count playtime rather than wall-clock time — there is no elapsed-time arithmetic anywhere, just "you were here
+     * for another second".
+     */
+    private void tickGrace() {
+        List<UUID> abandoned = this.graph.abandonedPlayers();
+        if (abandoned.isEmpty()) {
             return;
         }
-        this.ticksUntilExpirySweep = TICKS_PER_HOUR;
-        this.sweepExpiredInvites();
+
+        boolean showCountdown = Config.ABANDONED_COUNTDOWN_ENABLED.get();
+        List<UUID> expired = new ArrayList<>();
+        boolean changed = false;
+
+        for (UUID uuid : abandoned) {
+            ServerPlayer player = this.server.getPlayerList().getPlayer(uuid);
+            if (player == null) {
+                continue; // Offline: the clock is paused, not running.
+            }
+            SponsorEntry entry = this.graph.get(uuid).orElse(null);
+            if (entry == null) {
+                continue;
+            }
+            if (!entry.hasGraceClock()) {
+                // Abandoned before this feature existed, or loaded from an older file: give them a full window.
+                this.graph.startGrace(uuid, this.fullGraceSeconds());
+            }
+
+            int before = entry.getGraceSecondsRemaining();
+            int remaining = this.graph.decrementGrace(uuid, TICK_SECONDS);
+            changed = true;
+
+            int warning = GraceCountdown.warningCrossed(before, remaining);
+            if (warning > 0) {
+                player.sendSystemMessage(Messages.graceWarning(warning));
+            }
+            if (remaining <= 0) {
+                expired.add(uuid);
+            } else if (showCountdown) {
+                // One component, once a second, only for players who are both abandoned and online.
+                player.displayClientMessage(Messages.graceActionBar(remaining), true);
+            }
+        }
+
+        for (UUID uuid : expired) {
+            this.expirePlayer(uuid);
+        }
+        if (changed && expired.isEmpty()) {
+            // Expiry saves on its own; this covers the ordinary case of clocks simply ticking down.
+            this.save();
+        }
+    }
+
+    /** How long a fresh grace period is, in seconds. */
+    public int fullGraceSeconds() {
+        return GraceCountdown.minutesToSeconds(Config.ABANDONED_GRACE_MINUTES.get());
+    }
+
+    /**
+     * Removes a player whose grace ran out, then lets the support model deal with the consequences.
+     *
+     * <p>There is deliberately no cascade code here. Expiring marks them not-live, and the recompute inside
+     * {@link #commit} refuses to carry support through anyone who is not live — so everyone who depended on them is
+     * abandoned automatically, each starting a full grace period of their own.
+     */
+    private void expirePlayer(UUID uuid) {
+        SponsorEntry entry = this.graph.get(uuid).orElse(null);
+        String name = entry == null ? uuid.toString() : entry.displayName();
+        this.graph.expire(uuid);
+
+        if (this.commit(null).isEmpty()) {
+            Sponsorsystem.LOGGER.error("Could not persist the expiry of {}; it has been rolled back and will be "
+                    + "retried.", name);
+            return;
+        }
+
+        this.whitelist.remove(uuid, entry == null ? null : entry.getLastKnownName());
+        this.kick(uuid, Component.translatable("sponsorsystem.kick.support_expired"));
+        Sponsorsystem.LOGGER.info("{} ran out of grace with nobody backing them and has been removed from the "
+                + "whitelist.", name);
+        SponsorCommands.announce(this, Messages.info("sponsorsystem.support.expired_announce", Messages.name(name)));
     }
 
     /** Revokes and unwhitelists invites that were never taken up within the configured window. */

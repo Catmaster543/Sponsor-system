@@ -32,7 +32,8 @@ import net.minecraft.world.phys.Vec3;
  */
 class CommandPermissionTest {
     /** Commands any player must be able to run: backing someone, and stopping backing them. */
-    private static final List<String> PLAYER_COMMANDS = List.of("invite", "sponsor", "uninvite", "unsponsor");
+    private static final List<String> PLAYER_COMMANDS =
+            List.of("invite", "sponsor", "uninvite", "unsponsor", "mysponsors");
     /** Commands only an operator may run. */
     private static final List<String> ADMIN_COMMANDS = List.of("invitetree", "sponsorship");
 
@@ -125,6 +126,16 @@ class CommandPermissionTest {
     void withdrawHasBothNames() {
         assertNotNull(dispatcher.getRoot().getChild("uninvite"));
         assertNotNull(dispatcher.getRoot().getChild("unsponsor"));
+    }
+
+
+    @Test
+    @DisplayName("/mysponsors takes no arguments at all, so it can only ever be about the caller")
+    void mySponsorsHasNoArguments() {
+        CommandNode<CommandSourceStack> node = node("mysponsors");
+
+        assertTrue(node.getChildren().isEmpty(),
+                "any argument here would be a way to ask about somebody else, which is the one thing it must not do");
     }
 
     @Test

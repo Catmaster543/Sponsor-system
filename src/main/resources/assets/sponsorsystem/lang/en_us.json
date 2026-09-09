@@ -3,6 +3,7 @@
   "sponsorsystem.status.active": "active",
   "sponsorsystem.status.revoked": "revoked",
   "sponsorsystem.status.abandoned": "abandoned",
+  "sponsorsystem.status.expired": "expired",
 
   "sponsorsystem.action.confirm": "[confirm]",
   "sponsorsystem.action.confirm.hover": "Click to go ahead anyway.",
@@ -28,8 +29,10 @@
   "sponsorsystem.tickets.unlimited": "You have unlimited support tickets.",
   "sponsorsystem.tickets.none_left": "You have no support tickets left. You may back %s players at a time; withdraw from someone first.",
 
-  "sponsorsystem.support.lost": "Nobody is backing you any more. You can still play, but ask someone to /sponsor you.",
-  "sponsorsystem.support.lost_on_join": "Nobody is currently backing you. You can still play, but ask someone to /sponsor you.",
+  "sponsorsystem.support.lost": "Nobody is backing you any more. You have %s minute(s) of playtime to find a new supporter before you lose access.",
+  "sponsorsystem.support.expired_announce": "%s ran out of time with nobody backing them and has been removed.",
+  "sponsorsystem.support.lost_on_join": "Nobody is backing you. You have %s minute(s) of playtime left before you lose access.",
+  "sponsorsystem.support.lost_on_join_detail": "The countdown only runs while you are online. Ask someone to /sponsor you.",
   "sponsorsystem.support.restored": "You have support again.",
   "sponsorsystem.support.restored_by": "%s is backing you. You have support again.",
 
@@ -62,6 +65,23 @@
 
   "sponsorsystem.kick.revoked_by_admin": "An operator revoked your place on this server.",
   "sponsorsystem.kick.expired": "Your invite expired before you used it. Ask whoever invited you to try again.",
+  "sponsorsystem.kick.support_expired": "Nobody was backing you when your grace period ran out, so you have been removed. You can come back if somebody invites you again.",
+
+  "sponsorsystem.grace.action_bar": "No support - %s remaining",
+  "sponsorsystem.grace.warning": "Nobody is backing you. %s minute(s) of playtime left before you lose access - ask someone to /sponsor you.",
+
+  "sponsorsystem.mysponsors.players_only": "This command shows your own relationships, so only a player can run it. Operators can inspect anyone with /invitetree.",
+  "sponsorsystem.mysponsors.header": "--- Your standing ---",
+  "sponsorsystem.mysponsors.status": "Status: %s",
+  "sponsorsystem.mysponsors.grace": "Time left before you lose access: %s",
+  "sponsorsystem.mysponsors.you_are_root": "You are a root of the graph. Nobody backs you, and nobody needs to.",
+  "sponsorsystem.mysponsors.nobody_backs_you": "Nobody is backing you.",
+  "sponsorsystem.mysponsors.backed_by_header": "Backed by (%s):",
+  "sponsorsystem.mysponsors.inviter_note": "(invited you)",
+  "sponsorsystem.mysponsors.equal_note": "Everyone listed above is equally answerable for you.",
+  "sponsorsystem.mysponsors.backing_nobody": "You are not backing anyone.",
+  "sponsorsystem.mysponsors.backing_header": "You are backing (%s):",
+  "sponsorsystem.mysponsors.at_risk": "<- needs a supporter",
 
   "sponsorsystem.tree.header": "Support graph for %s",
   "sponsorsystem.tree.summary": "%s | %s below them | backing %s | backed by %s",
@@ -111,6 +131,8 @@
   "sponsorsystem.configuration.section.sponsorsystem.server.toml": "Sponsorship",
   "sponsorsystem.configuration.section.sponsorsystem.server.toml.title": "Sponsorship",
   "sponsorsystem.configuration.forceWhitelistOn": "Force whitelist on at startup",
+  "sponsorsystem.configuration.abandonedGraceMinutes": "Grace period after losing support (minutes)",
+  "sponsorsystem.configuration.abandonedCountdownEnabled": "Show the countdown on the action bar",
   "sponsorsystem.configuration.supportModel": "Support model",
   "sponsorsystem.configuration.sponsorshipMinDurationMinutes": "Minimum sponsorship duration (minutes)",
   "sponsorsystem.configuration.maxSupportTicketsPerPlayer": "Support tickets per player",

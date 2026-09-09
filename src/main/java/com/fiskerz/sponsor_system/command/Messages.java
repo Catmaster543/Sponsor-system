@@ -3,6 +3,7 @@ package com.fiskerz.sponsor_system.command;
 import java.util.Locale;
 import java.util.UUID;
 
+import com.fiskerz.sponsor_system.graph.GraceCountdown;
 import com.fiskerz.sponsor_system.graph.SponsorEntry;
 import com.fiskerz.sponsor_system.graph.SponsorGraphException;
 import com.fiskerz.sponsor_system.graph.SponsorStatus;
@@ -58,6 +59,7 @@ public final class Messages {
             case ACTIVE -> text.withStyle(ChatFormatting.GREEN);
             case REVOKED -> text.withStyle(ChatFormatting.DARK_GRAY, ChatFormatting.STRIKETHROUGH);
             case ABANDONED -> text.withStyle(ChatFormatting.RED, ChatFormatting.BOLD);
+            case EXPIRED -> text.withStyle(ChatFormatting.DARK_GRAY, ChatFormatting.STRIKETHROUGH);
         };
     }
 
@@ -118,6 +120,36 @@ public final class Messages {
                 .append(Component.literal("\n"))
                 .append(info("sponsorsystem.tree.hover", status(entry.getStatus()), supporters, supported));
     }
+
+    // ---------------------------------------------------------------------------------------------------------------
+    // The abandonment countdown
+    // ---------------------------------------------------------------------------------------------------------------
+
+    /**
+     * The action-bar countdown line, coloured by how close it is.
+     *
+     * <p>Sent with {@code ServerPlayer#displayClientMessage(component, true)} — the boolean is the action-bar flag.
+     * Exactly one component is built per abandoned online player per second.
+     */
+    public static MutableComponent graceActionBar(int secondsRemaining) {
+        MutableComponent text = Component.translatable("sponsorsystem.grace.action_bar",
+                GraceCountdown.format(secondsRemaining));
+        return switch (GraceCountdown.urgencyOf(secondsRemaining)) {
+            case CALM -> text.withStyle(ChatFormatting.YELLOW);
+            case URGENT -> text.withStyle(ChatFormatting.RED);
+            case CRITICAL -> text.withStyle(ChatFormatting.RED, ChatFormatting.BOLD);
+        };
+    }
+
+    /** The chat warning sent when the clock crosses a threshold. Chat persists; the action bar does not. */
+    public static MutableComponent graceWarning(int minutesRemaining) {
+        MutableComponent text = Component.translatable("sponsorsystem.grace.warning", minutesRemaining);
+        return minutesRemaining <= 5
+                ? text.withStyle(ChatFormatting.RED, ChatFormatting.BOLD)
+                : text.withStyle(ChatFormatting.RED);
+    }
+
+    // ---------------------------------------------------------------------------------------------------------------
 
     // ---------------------------------------------------------------------------------------------------------------
     // Shared failure wording

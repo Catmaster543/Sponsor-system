@@ -325,6 +325,61 @@ class SponsorStoreMigrationTest {
     }
 
     @Test
+    @DisplayName("a grace clock survives a full save and reload, which is what a server restart is")
+    void gracePersistsAcrossRestart() throws IOException {
+        SponsorStore store = this.store();
+        SponsorEntry abandoned = new SponsorEntry(ALICE, "Alice", 1L, 2L, SponsorStatus.ABANDONED, false, 12 * 60);
+        store.save(List.of(new SponsorEntry(ROOT, "Root", 1L, 2L, SponsorStatus.ACTIVE, true), abandoned),
+                List.of());
+
+        SponsorStore.Loaded reloaded = new SponsorStore(this.directory.resolve("sponsors.json")).load(new ArrayList<>());
+
+        SponsorEntry back = reloaded.entries().stream().filter(entry -> entry.getUuid().equals(ALICE))
+                .findFirst().orElseThrow();
+        assertEquals(SponsorStatus.ABANDONED, back.getStatus());
+        assertTrue(back.hasGraceClock());
+        assertEquals(12 * 60, back.getGraceSecondsRemaining(),
+                "a restart must neither reset the clock nor skip it forward");
+    }
+
+    @Test
+    @DisplayName("a player with no clock round-trips without gaining one")
+    void noClockRoundTrips() throws IOException {
+        SponsorStore store = this.store();
+        store.save(List.of(new SponsorEntry(ROOT, "Root", 1L, 2L, SponsorStatus.ACTIVE, true)), List.of());
+
+        SponsorStore.Loaded reloaded = this.store().load(new ArrayList<>());
+
+        assertFalse(reloaded.entries().get(0).hasGraceClock());
+        assertEquals(SponsorEntry.NO_GRACE, reloaded.entries().get(0).getGraceSecondsRemaining());
+    }
+
+    @Test
+    @DisplayName("a file written before the clock existed loads with no clock, not a zero one")
+    void olderFileHasNoClock() throws IOException {
+        // A zero would mean "expire immediately"; absent must mean "no clock yet".
+        Files.writeString(this.directory.resolve("sponsors.json"), """
+                { "schemaVersion": 2, "entries": [
+                  { "uuid": "%s", "name": "Alice", "status": "ABANDONED" } ], "edges": [] }
+                """.formatted(ALICE), StandardCharsets.UTF_8);
+
+        SponsorStore.Loaded loaded = this.store().load(new ArrayList<>());
+
+        assertFalse(loaded.entries().get(0).hasGraceClock());
+    }
+
+    @Test
+    @DisplayName("the expired status round-trips")
+    void expiredRoundTrips() throws IOException {
+        this.store().save(List.of(new SponsorEntry(ALICE, "Alice", 1L, 2L, SponsorStatus.EXPIRED, false)), List.of());
+
+        SponsorStore.Loaded loaded = this.store().load(new ArrayList<>());
+
+        assertEquals(SponsorStatus.EXPIRED, loaded.entries().get(0).getStatus());
+        assertFalse(loaded.entries().get(0).getStatus().isLive());
+    }
+
+    @Test
     @DisplayName("saving leaves no temp file behind")
     void cleansUpTempFile() throws IOException {
         this.store().save(List.of(new SponsorEntry(ROOT, "Root", 1L, 0L, SponsorStatus.ACTIVE, true)), List.of());

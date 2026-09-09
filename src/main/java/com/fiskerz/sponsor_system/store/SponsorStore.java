@@ -232,8 +232,13 @@ public final class SponsorStore {
                         accepted > 0L ? SponsorStatus.ACTIVE : SponsorStatus.PENDING);
                 boolean isRoot = object.has("root") && object.get("root").isJsonPrimitive()
                         && object.get("root").getAsBoolean();
+                // Absent for a file written before the grace clock existed, which is correct: a player who is
+                // abandoned in such a file starts from a full window rather than an arbitrary one.
+                int grace = object.has("graceSeconds") && object.get("graceSeconds").isJsonPrimitive()
+                        ? object.get("graceSeconds").getAsInt()
+                        : SponsorEntry.NO_GRACE;
                 entries.add(new SponsorEntry(uuid, readString(object, "name"), readLong(object, "invitedAt"),
-                        accepted, status, isRoot));
+                        accepted, status, isRoot, grace));
             } catch (RuntimeException exception) {
                 warnings.add("Entry #" + i + " in sponsors.json could not be read (" + exception.getMessage() + "); skipped.");
             }
@@ -337,6 +342,9 @@ public final class SponsorStore {
             object.addProperty("invitedAt", entry.getInvitedAt());
             object.addProperty("acceptedAt", entry.getAcceptedAt());
             object.addProperty("status", entry.getStatus().name());
+            if (entry.hasGraceClock()) {
+                object.addProperty("graceSeconds", entry.getGraceSecondsRemaining());
+            }
             if (entry.isRoot()) {
                 object.addProperty("root", true);
             }

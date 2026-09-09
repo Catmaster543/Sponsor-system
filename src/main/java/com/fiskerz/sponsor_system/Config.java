@@ -77,6 +77,29 @@ public final class Config {
             .defineInRange("sponsorshipMinDurationMinutes", 10, 0, Integer.MAX_VALUE);
 
     // -----------------------------------------------------------------------------------------------------------
+    // The abandonment clock
+    // -----------------------------------------------------------------------------------------------------------
+
+    public static final ModConfigSpec.IntValue ABANDONED_GRACE_MINUTES = BUILDER
+            .comment("How long a player who has lost all support may keep playing before they are removed.",
+                    "",
+                    "This is PLAYTIME, not wall-clock time: it counts down only while they are online, and it is",
+                    "saved with their entry, so logging out pauses it and a restart does not reset it. Somebody who",
+                    "logs off with 12 minutes left comes back to 12 minutes left.",
+                    "",
+                    "Anyone backing them again clears the clock entirely; their next abandonment starts from full.",
+                    "0 removes them the moment they lose support, with no grace at all.")
+            .translation("sponsorsystem.configuration.abandonedGraceMinutes")
+            .defineInRange("abandonedGraceMinutes", 30, 0, Integer.MAX_VALUE);
+
+    public static final ModConfigSpec.BooleanValue ABANDONED_COUNTDOWN_ENABLED = BUILDER
+            .comment("Show abandoned players a live countdown on the action bar, above the hotbar.",
+                    "Turn this off for chat warnings only. The action bar is shared with vanilla uses such as held",
+                    "item names and jukebox tracks, and with other mods, so on a busy server it may be contested.")
+            .translation("sponsorsystem.configuration.abandonedCountdownEnabled")
+            .define("abandonedCountdownEnabled", true);
+
+    // -----------------------------------------------------------------------------------------------------------
     // Support tickets
     // -----------------------------------------------------------------------------------------------------------
 

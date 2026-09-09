@@ -222,7 +222,7 @@ public final class InviteTreeCommand {
             case ACTIVE -> ChatFormatting.WHITE;
             case PENDING -> ChatFormatting.YELLOW;
             case ABANDONED -> ChatFormatting.RED;
-            case REVOKED -> ChatFormatting.DARK_GRAY;
+            case REVOKED, EXPIRED -> ChatFormatting.DARK_GRAY;
         };
         if (!clickable) {
             return Messages.plainName(entry, colour);

@@ -13,10 +13,17 @@ public enum SponsorStatus {
     /**
      * Every supporter is gone, or every supporter has themselves lost support.
      *
-     * <p>As of this round an abandoned player stays whitelisted and keeps playing; losing support is recorded and
-     * announced but not yet enforced. The grace clock that acts on this is a later round.
+     * <p>An abandoned player is still whitelisted and still playing: they are on a grace period, counted in playtime,
+     * and they get it back the moment anyone backs them again.
      */
-    ABANDONED;
+    ABANDONED,
+    /**
+     * The grace period ran out with nobody having stepped in. Not whitelisted.
+     *
+     * <p>This is the one status a player reaches by nothing but the passage of time. They may come back if somebody
+     * invites them again.
+     */
+    EXPIRED;
 
     public static SponsorStatus byName(String name, SponsorStatus fallback) {
         if (name == null) {
@@ -33,10 +40,20 @@ public enum SponsorStatus {
     /**
      * Whether this player should hold a whitelist entry.
      *
-     * <p>{@link #ABANDONED} counts as live: they have lost their backing but have not lost access, which is exactly
-     * the state this round leaves them in.
+     * <p>{@link #ABANDONED} counts as live: they have lost their backing but not yet their access, which is exactly
+     * what the grace period is.
+     *
+     * <p>This is also the single test the support model uses to decide who can carry support onward, which is what
+     * makes an expiry cascade automatic: an expired player stops being live, so nothing flows through them, so
+     * everyone who depended on them is abandoned by the very next recompute. There is no separate cascade routine and
+     * there must not be one.
      */
     public boolean isLive() {
-        return this != REVOKED;
+        return this != REVOKED && this != EXPIRED;
+    }
+
+    /** Whether a grace countdown makes sense for this status. */
+    public boolean isOnGracePeriod() {
+        return this == ABANDONED;
     }
 }

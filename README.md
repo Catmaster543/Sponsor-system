@@ -59,6 +59,7 @@ vote of confidence, and entirely legal.
 | `/sponsor <name>` | Adds your support to someone already here. Grants no new access — it makes you answerable for them. |
 | `/uninvite <name>` | Withdraws your own support from someone. |
 | `/unsponsor <name>` | The same command under a different name. Use whichever fits what you meant. |
+| `/mysponsors` | Who backs you, who you back, your status and your remaining tickets. About you only — no arguments. |
 
 `/uninvite` and `/unsponsor` are aliases of one operation: **remove your own backing of that player**, whatever kind it
 was. Since every supporter carries the same weight, taking back an invite and taking back a sponsorship are the same
@@ -85,14 +86,40 @@ the commands are absent from their tab-completion entirely.
 
 ## Support, and losing it
 
-A player is **supported** while somebody is backing them. Losing all support sets their status to `ABANDONED`.
+A player is **supported** while somebody is backing them. Losing all support sets their status to `ABANDONED` and
+starts a **grace period**.
 
-**As of this version, abandonment is recorded but not enforced.** An abandoned player keeps their whitelist entry and
-carries on playing; they are told they have nobody backing them, and so is the log. The grace period and the eventual
-removal are a later version.
+### The grace period
 
-Support is recomputed from scratch every time an edge is added or removed, and once at startup. Removing one edge near
-a root can strand a whole branch at once — that is correct, and intended.
+`abandonedGraceMinutes`, **30** by default.
+
+**It counts playtime, not wall-clock time.** The clock ticks down only while the player is online, and the remaining
+seconds are saved with their entry. Logging out pauses it; a restart or a crash neither resets it nor skips it. Someone
+who logs off with 12 minutes left comes back to 12 minutes left. Someone abandoned while offline starts their clock on
+their next login, and is told why on the way in.
+
+While the clock runs they keep playing normally. If it reaches zero they are removed from the whitelist and
+disconnected, with a message saying they lost all support and can return if somebody invites them again. Their status
+becomes `EXPIRED`.
+
+**Anyone backing them clears the clock outright** — not pauses it. They are told who stepped in, and a later
+abandonment starts from a full window rather than resuming a burnt-down one. `sponsorshipMinDurationMinutes` is what
+stops that being farmed: you cannot sponsor someone and immediately withdraw to mint fresh grace on demand.
+
+An expiry cascades. Once someone is expired, support cannot flow through them, so anyone who depended on them is
+abandoned by the next recompute — each with a full grace period of their own. That falls out of the support model
+rather than being a separate rule.
+
+### The countdown
+
+Abandoned players see a live `MM:SS` countdown on the action bar, updated once a second: yellow above five minutes, red
+below, red and bold under one minute. Chat warnings are sent at 30, 15, 5 and 1 minute, and on the login that starts or
+resumes the clock — the action bar is easy to miss and vanishes on relog, chat does not.
+
+`abandonedCountdownEnabled` (default `true`) turns the action bar off and leaves the chat warnings.
+
+**The action bar is shared.** Vanilla uses it for held item names and jukebox tracks, and other mods use it too. On a
+busy server the countdown may be overwritten between updates; the chat warnings are the reliable channel.
 
 ### `supportModel`
 
@@ -104,6 +131,18 @@ understanding before you choose it: two players can sponsor each other and hold 
 inviter withdraws, they prop each other up, and nobody upstream can do anything about it. Use it only if you want that.
 
 Getting support back returns a player to normal immediately, and they are told who stepped in.
+
+### `/mysponsors` and why it shows so little
+
+`/mysponsors` is **strictly first-degree**: everyone who backs you, everyone you back, and nothing further. No
+arguments, no clickable names, no way to look at anybody else. It will not tell you who backs the people who back you.
+
+That is deliberate. A fully visible support graph is a map of who to lean on to get at somebody. Keeping the personal
+view one hop deep lets a player see exactly what they owe and are owed without handing them leverage over strangers.
+Operators who need the wider picture use `/invitetree`.
+
+The statuses of your direct neighbours *are* shown, including a marker on anyone you back who has lost their support —
+that is information about people you are already answerable for.
 
 ## Support tickets
 
@@ -118,6 +157,8 @@ invites and sponsorships — that shared scarcity is what forces a real choice a
 | `maxSponsorshipsPerPlayer` | `10` | Sponsorship pool, used only when the budgets are split. |
 | `unlimitedTicketsPermissionLevel` | `3` | Permission level at which tickets stop applying. The root is always exempt. |
 | `sponsorshipMinDurationMinutes` | `10` | How long a sponsorship must be held before its author may withdraw it. Operators bypass. |
+| `abandonedGraceMinutes` | `30` | Playtime a player has after losing all support before they are removed. `0` removes them at once. |
+| `abandonedCountdownEnabled` | `true` | Show the live countdown on the action bar. Chat warnings are sent either way. |
 | `supportModel` | `REACHABILITY` | See above. |
 
 A ticket comes back when you withdraw, and also when the player you were backing is removed from the server — you are
@@ -264,7 +305,8 @@ let the mod rebuild it from `sponsors.json` on the next start.
 - **Cycles are legal.** Sponsoring someone above you is allowed, so the edge set can contain loops. Every traversal
   carries a visited set.
 - **Statuses.** `PENDING` (invited, whitelisted, never joined), `ACTIVE` (has joined and is supported), `ABANDONED`
-  (nobody backs them — still whitelisted, not yet enforced), `REVOKED` (removed by an operator — kept as an audit
+  (nobody backs them — still whitelisted, on a grace clock), `EXPIRED` (the clock ran out — not whitelisted, may return
+  if reinvited), `REVOKED` (removed by an operator — kept as an audit
   trail, not whitelisted).
 ### A note on operators
 
@@ -282,8 +324,9 @@ deop them first. The mod says as much where it matters rather than pretending ot
 ```
 
 The sponsorship graph and its JSON store are plain Java with no Minecraft imports, so they are unit tested without a
-game instance — 116 tests covering the two support models, branch-wide abandonment, inviter promotion, ticket spend
-and refund in both budget modes, the schema 1 migration, cycle handling in every traversal, and command permission gating.
+game instance — 162 tests covering the two support models, branch-wide abandonment, the grace clock and its persistence,
+expiry cascade, the first-degree privacy rule, ticket spend and refund in both budget modes, the schema 1 migration,
+cycle handling in every traversal, and command permission gating.
 
 JUnit is the one dependency added to the MDK, and it is test-only; the mod itself pulls in nothing beyond what the MDK
 already ships.

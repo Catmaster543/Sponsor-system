@@ -40,6 +40,7 @@ public final class SponsorCommands {
         InviteCommand.register(dispatcher);
         SponsorCommand.register(dispatcher);
         WithdrawCommand.register(dispatcher);
+        MySponsorsCommand.register(dispatcher);
         InviteTreeCommand.register(dispatcher);
         AdminCommands.register(dispatcher);
     }

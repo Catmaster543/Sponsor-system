@@ -13,6 +13,9 @@ import java.util.UUID;
  * and so chat can show something human; it is refreshed on every login and must never be used to look an entry up.
  */
 public final class SponsorEntry {
+    /** Sentinel for "no grace clock is running for this player". */
+    public static final int NO_GRACE = -1;
+
     private final UUID uuid;
     private String lastKnownName;
     private long invitedAt;
@@ -25,6 +28,15 @@ public final class SponsorEntry {
      * final edge into a promotion to root instead of an abandonment.
      */
     private boolean root;
+    /**
+     * Seconds of grace left before an abandoned player is removed, or {@link #NO_GRACE} when no clock is
+     * running.
+     *
+     * <p>This is stored rather than derived from a deadline timestamp because the clock counts <em>playtime</em>,
+     * not wall-clock time: it only ticks down while the player is online. A deadline would keep running while
+     * they were logged off, so somebody abandoned overnight would come back already expired.
+     */
+    private int graceSecondsRemaining = NO_GRACE;
 
     public SponsorEntry(UUID uuid, String lastKnownName, long invitedAt, long acceptedAt, SponsorStatus status) {
         this(uuid, lastKnownName, invitedAt, acceptedAt, status, false);
@@ -32,6 +44,12 @@ public final class SponsorEntry {
 
     public SponsorEntry(UUID uuid, String lastKnownName, long invitedAt, long acceptedAt, SponsorStatus status,
             boolean root) {
+        this(uuid, lastKnownName, invitedAt, acceptedAt, status, root, NO_GRACE);
+    }
+
+    public SponsorEntry(UUID uuid, String lastKnownName, long invitedAt, long acceptedAt, SponsorStatus status,
+            boolean root, int graceSecondsRemaining) {
+        this.graceSecondsRemaining = graceSecondsRemaining;
         this.root = root;
         this.uuid = Objects.requireNonNull(uuid, "uuid");
         this.lastKnownName = lastKnownName;
@@ -77,6 +95,19 @@ public final class SponsorEntry {
 
     void setRoot(boolean root) {
         this.root = root;
+    }
+
+    /** Seconds of grace left, or {@link #NO_GRACE} if no clock is running. */
+    public int getGraceSecondsRemaining() {
+        return this.graceSecondsRemaining;
+    }
+
+    void setGraceSecondsRemaining(int seconds) {
+        this.graceSecondsRemaining = seconds;
+    }
+
+    public boolean hasGraceClock() {
+        return this.graceSecondsRemaining >= 0;
     }
 
     public SponsorStatus getStatus() {

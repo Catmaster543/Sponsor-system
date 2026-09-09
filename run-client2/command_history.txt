@@ -2,3 +2,10 @@
 /sponsor Dev2
 /invites Dev2
 /uninvite Dev
+/sponsor Dev
+/viewtree
+/invitetree
+/sponsor Dev2
+/sponsor Dev
+/mysponsors
+/uninvite Dev

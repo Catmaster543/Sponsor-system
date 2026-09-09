@@ -263,7 +263,7 @@ public final class SupportGraph {
         if (entry == null) {
             throw new SponsorGraphException(Reason.SUPPORTER_NOT_IN_GRAPH, supporter);
         }
-        if (entry.getStatus() == SponsorStatus.REVOKED) {
+        if (!entry.getStatus().isLive()) {
             throw new SponsorGraphException(Reason.SUPPORTER_REVOKED, supporter);
         }
     }
@@ -471,7 +471,7 @@ public final class SupportGraph {
         Set<UUID> supported = new LinkedHashSet<>();
         if (model == SupportModel.DIRECT) {
             for (SponsorEntry entry : this.entries.values()) {
-                if (entry.getStatus() == SponsorStatus.REVOKED) {
+                if (!entry.getStatus().isLive()) {
                     continue;
                 }
                 boolean backed = this.edgesTo(entry.getUuid()).stream()
@@ -487,7 +487,7 @@ public final class SupportGraph {
         // clique fail to hold itself up: nothing reaches it, so nothing ever enqueues it.
         Deque<UUID> queue = new ArrayDeque<>();
         for (SponsorEntry entry : this.entries.values()) {
-            if (entry.getStatus() != SponsorStatus.REVOKED && entry.isRoot() && supported.add(entry.getUuid())) {
+            if (entry.getStatus().isLive() && entry.isRoot() && supported.add(entry.getUuid())) {
                 queue.add(entry.getUuid());
             }
         }
@@ -498,7 +498,7 @@ public final class SupportGraph {
                     continue;
                 }
                 SponsorEntry target = this.entries.get(edge.to());
-                if (target == null || target.getStatus() == SponsorStatus.REVOKED) {
+                if (target == null || !target.getStatus().isLive()) {
                     continue;
                 }
                 if (supported.add(edge.to())) {
@@ -524,21 +524,38 @@ public final class SupportGraph {
      * @return who newly lost support and who newly regained it
      */
     public SupportChange recomputeSupport(SupportModel model) {
+        return this.recomputeSupport(model, SponsorEntry.NO_GRACE);
+    }
+
+    /**
+     * Recomputes support and moves both statuses and grace clocks to match.
+     *
+     * @param fullGraceSeconds seconds to start a newly abandoned player's clock at, or {@link SponsorEntry#NO_GRACE}
+     *                         to leave clocks alone entirely. Restored players always have their clock cleared, so a
+     *                         later abandonment begins from a full window rather than resuming a burnt-down one.
+     */
+    public SupportChange recomputeSupport(SupportModel model, int fullGraceSeconds) {
         Set<UUID> supported = this.computeSupported(model);
         Set<UUID> abandoned = new LinkedHashSet<>();
         Set<UUID> restored = new LinkedHashSet<>();
 
         for (SponsorEntry entry : this.entries.values()) {
-            if (entry.getStatus() == SponsorStatus.REVOKED) {
+            if (!entry.getStatus().isLive()) {
                 continue;
             }
             boolean hasSupport = supported.contains(entry.getUuid());
             if (!hasSupport && entry.getStatus() != SponsorStatus.ABANDONED) {
                 entry.setStatus(SponsorStatus.ABANDONED);
                 abandoned.add(entry.getUuid());
+                if (fullGraceSeconds >= 0) {
+                    this.startGrace(entry.getUuid(), fullGraceSeconds);
+                }
             } else if (hasSupport && entry.getStatus() == SponsorStatus.ABANDONED) {
                 // Back to whichever normal state they were in before: a player who never joined is still pending.
                 entry.setStatus(entry.getAcceptedAt() > 0L ? SponsorStatus.ACTIVE : SponsorStatus.PENDING);
+                // Being rescued wipes the clock, not just pauses it. Surviving an abandonment should not leave you
+                // one edge away from instant removal.
+                this.clearGrace(entry.getUuid());
                 restored.add(entry.getUuid());
             }
         }
@@ -554,6 +571,79 @@ public final class SupportGraph {
 
     // -------------------------------------------------------------------------------------------------------------
     // Tickets
+
+    // -------------------------------------------------------------------------------------------------------------
+    // Grace clock
+    // -------------------------------------------------------------------------------------------------------------
+
+    /**
+     * Starts a grace clock for a player who does not already have one.
+     *
+     * <p>Deliberately does not reset an existing clock. A recompute runs on every edge change, and a player who is
+     * still abandoned must keep the time they have already burned through rather than getting a fresh window every
+     * time somebody unrelated is invited.
+     *
+     * @return {@code true} if a clock was started
+     */
+    public boolean startGrace(UUID uuid, int fullGraceSeconds) {
+        SponsorEntry entry = this.entries.get(uuid);
+        if (entry == null || entry.hasGraceClock()) {
+            return false;
+        }
+        entry.setGraceSecondsRemaining(Math.max(0, fullGraceSeconds));
+        return true;
+    }
+
+    /** Stops a player's clock and forgets the remaining time, so their next abandonment starts from full. */
+    public void clearGrace(UUID uuid) {
+        SponsorEntry entry = this.entries.get(uuid);
+        if (entry != null) {
+            entry.setGraceSecondsRemaining(SponsorEntry.NO_GRACE);
+        }
+    }
+
+    /**
+     * Burns time off a player's clock.
+     *
+     * @return the seconds left afterwards, or {@link SponsorEntry#NO_GRACE} if they had no clock running
+     */
+    public int decrementGrace(UUID uuid, int seconds) {
+        SponsorEntry entry = this.entries.get(uuid);
+        if (entry == null || !entry.hasGraceClock()) {
+            return SponsorEntry.NO_GRACE;
+        }
+        int remaining = Math.max(0, entry.getGraceSecondsRemaining() - Math.max(0, seconds));
+        entry.setGraceSecondsRemaining(remaining);
+        return remaining;
+    }
+
+    /**
+     * Marks a player as having run out of grace: not whitelisted, no clock.
+     *
+     * <p>Their own outgoing edges are left exactly as they are. That is what makes the cascade automatic — an expired
+     * player is no longer {@linkplain SponsorStatus#isLive() live}, so the next recompute refuses to carry support
+     * through them and everyone who depended on them is abandoned with a clock of their own.
+     */
+    public void expire(UUID uuid) {
+        SponsorEntry entry = this.entries.get(uuid);
+        if (entry == null) {
+            throw new SponsorGraphException(Reason.NOT_IN_GRAPH, uuid);
+        }
+        entry.setStatus(SponsorStatus.EXPIRED);
+        entry.setGraceSecondsRemaining(SponsorEntry.NO_GRACE);
+    }
+
+    /** Everyone currently on a grace clock. */
+    public List<UUID> abandonedPlayers() {
+        List<UUID> abandoned = new ArrayList<>();
+        for (SponsorEntry entry : this.entries.values()) {
+            if (entry.getStatus() == SponsorStatus.ABANDONED) {
+                abandoned.add(entry.getUuid());
+            }
+        }
+        return abandoned;
+    }
+
     // -------------------------------------------------------------------------------------------------------------
 
     /**
@@ -581,7 +671,7 @@ public final class SupportGraph {
                 continue;
             }
             SponsorEntry target = this.entries.get(edge.to());
-            if (target != null && target.getStatus() != SponsorStatus.REVOKED) {
+            if (target != null && target.getStatus().isLive()) {
                 count++;
             }
         }
