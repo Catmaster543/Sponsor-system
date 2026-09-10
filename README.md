@@ -3,6 +3,8 @@
 A server-side mod for Minecraft neoforge designed to prevent mess and chaos on servers.
 Now you might be asking: *Well how can a mod prevent players from misbehaving?* And you're right, it does not do so directly. Instead it helps **you**, as the server admin to make it very easy to estabilish a fair system that everyone will have in their own interest to follow.
 This is done through a so called "sponsor system", let me tell you about how it works.
+Or you can just [![Watch the demo](https://img.youtube.com/vi/VIDEO_ID/maxresdefault.jpg)](https://youtu.be/AWkyIMlMJ5I)
+
 
 # Invites
 This is the core of the mod; every single player that wants to join the server needs to be invited by someone else that is already on the server.
