@@ -34,7 +34,12 @@ bin/
 
 ### Minecraft Modding ###
 run/
+# Every other run directory the build declares too: run-client2, run-data, and anything added later.
+# These hold game output only - logs, options.txt, servers.dat, saves - all regenerated on the next launch.
+run-*/
 !**/src/**/run/
+# Gradle/dev-launch output at the project root.
+logs/
 **/src/generated/**/.cache/
 repo/
 !**/src/**/repo/
